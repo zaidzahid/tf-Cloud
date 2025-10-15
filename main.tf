@@ -2,28 +2,64 @@ terraform {
   required_providers {
     aws = {
       source = "hashicorp/aws"
-      version = "6.12.0"
+      version = "6.13.0"
     }
   }
 }
 
 provider "aws" {
-  region = "eu-north-1"
+    region = "us-east-1"
 }
 
-resource "aws_instance" "mywebserver" {
-  ami                         = "ami-0a716d3f3b16d290c"  # Ubuntu AMI for eu-north-1 (check latest)
-  instance_type               = "t3.micro"
+resource "aws_s3_bucket" "static_site" {
+  bucket = "my-unique-static-site-bucket-1234567890"
+  acl    = "public-read"
 
-  user_data = <<-EOF
-              #!/bin/bash 
-              apt update -y
-              apt install -y nginx
-              systemctl start nginx
-              systemctl enable nginx
-              EOF
-
-  tags = {
-    Name = "mywebserver"
+  versioning {
+    enabled = true
   }
+
+  website {
+    index_document = "index.html"
+    error_document = "error.html"
+  }
+  
+}
+
+resource "aws_s3_bucket_public_access_block" "public_access" {
+  bucket = aws_s3_bucket.static_site.id
+
+  block_public_acls       = false
+  block_public_policy     = false
+  ignore_public_acls      = false
+  restrict_public_buckets = false
+}
+
+resource "aws_s3_bucket_policy" "public_policy" {
+  bucket = aws_s3_bucket.static_site.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "PublicReadGetObject"
+        Effect    = "Allow"
+        Principal = "*"
+        Action    = "s3:GetObject"
+        Resource  = "${aws_s3_bucket.static_site.arn}/*"
+      }
+    ]
+  })
+}
+
+resource "aws_s3_bucket_website_configuration" "name" {
+    bucket = aws_s3_bucket.static_site.id
+    
+    index_document {
+        suffix = "index.html"
+    }
+    
+    error_document {
+        key = "error.html"
+    }
 }
